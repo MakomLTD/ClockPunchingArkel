@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Monitor - Advanced</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        html[lang="he"] body {
+            font-family: 'Assistant', sans-serif;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        input[type="time"], input[type="date"] {
+            border: 1px solid #e5e7eb; padding: 0.5rem; border-radius: 0.5rem;
+        }
+        .punch-input {
+             border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.25rem 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <div class="flex justify-between items-center mb-4">
+             <h1 class="text-3xl font-bold text-gray-800" data-translate="main_title">Employee Attendance Monitor</h1>
+             <button id="lang-toggle" class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">עברית</button>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-3" data-translate="shifts_title">Shift Definitions</h2>
+            <div id="shift-definitions-container" class="space-y-3"></div>
+            <div class="mt-4">
+                <button id="addShiftBtn" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors" data-translate="add_shift_btn">Add Shift</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-3" data-translate="data_management_title">Data Management</h2>
+             <div class="flex flex-wrap gap-4">
+                <button id="saveStateBtn" class="flex-1 bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition-colors" data-translate="save_state_btn">Save State</button>
+                <button id="loadStateBtn" class="flex-1 bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors" data-translate="load_state_btn">Load State</button>
+                <input type="file" id="fileLoader" class="hidden" accept=".json">
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-3" data-translate="paste_json_title">Paste NEW Punches Here</h2>
+            <textarea id="jsonInput" class="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition text-left" dir="ltr" placeholder="Paste only new data from the clock..."></textarea>
+            <div class="mt-4 flex justify-end">
+                <button id="loadDataBtn" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors" data-translate="load_data_btn">Merge New Data</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <header class="mb-6 pb-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <h1 class="text-2xl font-bold text-gray-700" data-translate="summary_title">Attendance Summary</h1>
+                <div class="flex gap-2">
+                    <button id="downloadSummaryCsvBtn" class="bg-green-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" /></svg>
+                        <span data-translate="download_summary_btn">Download Summary</span>
+                    </button>
+                     <button id="downloadDetailCsvBtn" class="bg-blue-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                        <span data-translate="download_detail_btn">Download Detail Report</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                <input type="text" id="searchInput" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition col-span-1 md:col-span-3" data-translate-placeholder="search_placeholder">
+                <div class="col-span-1 md:col-span-2">
+                    <label for="startDatePicker" class="text-sm font-medium text-gray-700" data-translate="from_date_label">From Date:</label>
+                    <input type="date" id="startDatePicker" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition">
+                </div>
+                 <div class="col-span-1 md:col-span-2">
+                    <label for="endDatePicker" class="text-sm font-medium text-gray-700" data-translate="to_date_label">To Date:</label>
+                    <input type="date" id="endDatePicker" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition">
+                </div>
+                 <button id="clearFiltersBtn" class="bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors self-end" data-translate="clear_filters_btn">Clear Filters</button>
+            </div>
+
+            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider" data-translate="th_name">Employee Name</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider" data-translate="th_id">Employee ID</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider" data-translate="th_days">Total Work Days</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider" data-translate="th_hours">Total Hours in Range</th>
+                            <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider" data-translate="th_actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attendanceTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                    <tfoot class="bg-gray-200 font-bold">
+                        <tr>
+                            <td class="px-6 py-4 text-left" colspan="2" data-translate="tf_total">Total</td>
+                            <td id="grandTotalDays" class="px-6 py-4 text-left">0</td>
+                            <td id="grandTotalHours" class="px-6 py-4 text-left">0.00</td>
+                            <td class="px-6 py-4"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div id="no-results" class="text-center py-10 text-gray-500 hidden">
+                <p class="text-xl" data-translate="no_results">No results found matching your search.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Punch Details -->
+    <div id="detailsModal" class="fixed inset-0 items-center justify-center p-4 z-50 hidden">
+        <div class="modal-overlay fixed inset-0 bg-black bg-opacity-50 transition-opacity ease-in-out duration-300 opacity-0"></div>
+        <div class="modal-container bg-white rounded-lg shadow-xl w-full max-w-3xl transform transition-all ease-in-out duration-300 scale-95 opacity-0">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center">
+                <h3 id="modalTitle" class="text-lg font-bold"></h3>
+                <button onclick="closeModal('detailsModal')" class="text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+            <div id="modalBody" class="p-5 max-h-[60vh] overflow-y-auto"></div>
+            <div class="p-3 bg-gray-50 flex justify-end rounded-b-lg">
+                <button onclick="closeModal('detailsModal')" class="bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors" data-translate="close_btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+     <!-- Modal for Calendar View -->
+    <div id="calendarModal" class="fixed inset-0 items-center justify-center p-4 z-50 hidden">
+        <div class="modal-overlay fixed inset-0 bg-black bg-opacity-50 transition-opacity ease-in-out duration-300 opacity-0"></div>
+        <div class="modal-container bg-white rounded-lg shadow-xl w-full max-w-4xl transform transition-all ease-in-out duration-300 scale-95 opacity-0">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center">
+                <h3 id="calendarModalTitle" class="text-lg font-bold"></h3>
+                <div class="flex items-center gap-4">
+                    <button id="prevMonthBtn" class="text-xl font-bold p-2 rounded-full hover:bg-gray-200">&lt;</button>
+                    <h4 id="calendarMonthYear" class="text-lg font-semibold w-32 text-center"></h4>
+                    <button id="nextMonthBtn" class="text-xl font-bold p-2 rounded-full hover:bg-gray-200">&gt;</button>
+                </div>
+                <button onclick="closeModal('calendarModal')" class="text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+            <div id="calendarModalBody" class="p-5"></div>
+        </div>
+    </div>
+
+
+    <script>
+    let allEmployeeData = [];
+    let currentLang = 'en';
+    let currentCalendarDate = new Date();
+
+    let SHIFTS = [
+        { id: 'day', name: 'Day Shift', start: '06:00', end: '17:59' },
+        { id: 'night', name: 'Night Shift', start: '18:00', end: '05:59' }
+    ];
+
+    const translations = {
+        'he': {
+            main_title: "מוניטור נוכחות עובדים", paste_json_title: "הדבק כאן החתמות חדשות", load_data_btn: "מזג נתונים חדשים", summary_title: "סיכום נוכחות",
+            download_summary_btn: "הורד סיכום", download_detail_btn: "הורד פירוט", search_placeholder: "🔍 חפש לפי שם או מספר עובד...", from_date_label: "מתאריך:",
+            to_date_label: "עד תאריך:", th_name: "שם עובד", th_id: "מספר עובד", th_days: "סה\"כ ימי עבודה", th_hours: "סה\"כ שעות בטווח", th_details: "פירוט משמרות",
+            tf_total: "סה\"כ", no_results: "לא נמצאו תוצאות.", modal_title_prefix: "פירוט משמרות - ", modal_day_total: "סה\"כ ליום:", modal_range_total: "סה\"כ בטווח:",
+            hours: "שעות", check_in: "כניסה", check_out: "יציאה", work_day: "יום עבודה:", view_details: "פרטים", close_btn: "סגור",
+            flag_unmatched: "החתמה לא תואמת", flag_open_shift: "משמרת פתוחה", flags: "הערות", shifts_title: "הגדרות משמרת", shift_name: "שם משמרת",
+            start_time: "שעת התחלה", end_time: "שעת סיום", day_shift: "משמרת יום", night_shift: "משמרת לילה", delete_punch: "מחק",
+            paid_status: "סטטוס תשלום", paid: "שולם", not_paid: "לא שולם", data_management_title: "ניהול נתונים", save_state_btn: "שמור מצב", load_state_btn: "טען מצב",
+            add_shift_btn: "הוסף משמרת", add_punch_btn: "הוסף החתמה", clear_filters_btn: "נקה מסננים", th_actions: "פעולות", calendar_view: "לוח שנה"
+        },
+        'en': {
+            main_title: "Employee Attendance Monitor", paste_json_title: "Paste NEW Punches Here", load_data_btn: "Merge New Data", summary_title: "Attendance Summary",
+            download_summary_btn: "Download Summary", download_detail_btn: "Download Detail Report", search_placeholder: "🔍 Search by name or ID...", from_date_label: "From Date:",
+            to_date_label: "To Date:", th_name: "Employee Name", th_id: "Employee ID", th_days: "Total Work Days", th_hours: "Total Hours in Range",
+            th_details: "Shift Details", tf_total: "Total", no_results: "No results found.", modal_title_prefix: "Shift Details - ",
+            modal_day_total: "Total for day:", modal_range_total: "Total in range:", hours: "hours", check_in: "Check In", check_out: "Check Out",
+            work_day: "Work Day:", view_details: "Details", close_btn: "Close", flag_unmatched: "Unmatched Punch",
+            flag_open_shift: "Open Shift", flags: "Flags", shifts_title: "Shift Definitions", shift_name: "Shift Name",
+            start_time: "Start Time", end_time: "End Time", day_shift: "Day Shift", night_shift: "Night Shift", delete_punch: "Delete",
+            paid_status: "Paid Status", paid: "Paid", not_paid: "Not Paid", data_management_title: "Data Management", save_state_btn: "Save State", load_state_btn: "Load State",
+            add_shift_btn: "Add Shift", add_punch_btn: "Add Punch", clear_filters_btn: "Clear Filters", th_actions: "Actions", calendar_view: "Calendar"
+        }
+    };
+    
+    function setLanguage(lang) {
+        currentLang = lang; document.documentElement.lang = lang; document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
+        document.querySelectorAll('[data-translate]').forEach(el => el.innerText = translations[currentLang][el.dataset.translate]);
+        document.querySelectorAll('[data-translate-placeholder]').forEach(el => el.placeholder = translations[currentLang][el.dataset.translatePlaceholder]);
+        document.getElementById('lang-toggle').innerText = lang === 'he' ? 'English' : 'עברית';
+        const textAlignment = `text-${lang === 'he' ? 'right' : 'left'}`;
+        document.querySelectorAll('thead th, tfoot td').forEach(el => { el.className = el.className.replace(/text-(left|right)/, textAlignment); });
+        renderShiftDefinitions(); displayData();
+    }
+    
+    function renderShiftDefinitions() {
+        const container = document.getElementById('shift-definitions-container');
+        const t = translations[currentLang];
+        container.innerHTML = SHIFTS.map(shift => `<div class="p-2 bg-gray-50 rounded-lg border grid grid-cols-1 gap-1"><div class="flex justify-between items-center"><input type="text" value="${shift.name}" onchange="updateShiftProperty('${shift.id}', 'name', this.value)" class="font-bold text-gray-700 bg-transparent border-0 p-1 w-full" placeholder="${t.shift_name}"><button onclick="deleteShift('${shift.id}')" class="text-red-400 hover:text-red-600 font-bold text-xl">&times;</button></div><div class="flex gap-2 mt-1"><input type="time" value="${shift.start}" onchange="updateShiftProperty('${shift.id}', 'start', this.value)" class="w-full"><input type="time" value="${shift.end}" onchange="updateShiftProperty('${shift.id}', 'end', this.value)" class="w-full"></div></div>`).join('');
+    }
+
+    function addShift() {
+        const newShift = { id: `shift_${Date.now()}`, name: 'New Shift', start: '08:00', end: '16:00' };
+        SHIFTS.push(newShift); renderShiftDefinitions();
+    }
+
+    function deleteShift(shiftId) {
+        SHIFTS = SHIFTS.filter(s => s.id !== shiftId); renderShiftDefinitions();
+        allEmployeeData = processAllData(allEmployeeData.flatMap(day => day.punches)); displayData();
+    }
+
+    function updateShiftProperty(shiftId, prop, value) {
+        const shift = SHIFTS.find(s => s.id === shiftId);
+        if (shift) { shift[prop] = value; allEmployeeData = processAllData(allEmployeeData.flatMap(day => day.punches)); displayData(); }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedStartDate = localStorage.getItem('startDate'); const savedEndDate = localStorage.getItem('endDate');
+        if (savedStartDate) document.getElementById('startDatePicker').value = savedStartDate;
+        if (savedEndDate) document.getElementById('endDatePicker').value = savedEndDate;
+        loadAndMergeData(dummyInitialData.data, true);
+        document.getElementById('loadDataBtn').addEventListener('click', () => loadAndMergeData());
+        document.getElementById('searchInput').addEventListener('input', displayData);
+        document.getElementById('startDatePicker').addEventListener('change', (e) => { localStorage.setItem('startDate', e.target.value); displayData(); });
+        document.getElementById('endDatePicker').addEventListener('change', (e) => { localStorage.setItem('endDate', e.target.value); displayData(); });
+        document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+            document.getElementById('searchInput').value = '';
+            const allDates = [...new Set(allEmployeeData.map(p => p.workDate))].sort();
+            document.getElementById('startDatePicker').value = allDates[0] || '';
+            document.getElementById('endDatePicker').value = allDates[allDates.length - 1] || '';
+            displayData();
+        });
+        document.getElementById('downloadSummaryCsvBtn').addEventListener('click', downloadSummaryCSV);
+        document.getElementById('downloadDetailCsvBtn').addEventListener('click', downloadDetailCSV);
+        document.getElementById('lang-toggle').addEventListener('click', () => setLanguage(currentLang === 'he' ? 'en' : 'he'));
+        document.getElementById('addShiftBtn').addEventListener('click', addShift);
+        document.getElementById('saveStateBtn').addEventListener('click', saveState);
+        document.getElementById('loadStateBtn').addEventListener('click', () => document.getElementById('fileLoader').click());
+        document.getElementById('fileLoader').addEventListener('change', loadState);
+        setLanguage('en');
+    });
+
+    function loadAndMergeData(newDataArray = null, isInitialLoad = false) {
+        try {
+            const dataToParse = newDataArray || JSON.parse(document.getElementById('jsonInput').value);
+            const newRawData = Array.isArray(dataToParse) ? dataToParse : (dataToParse.data || []);
+            if (newRawData.length === 0 && !isInitialLoad) { alert("No new data to merge."); return; }
+            const newProcessedData = processAllData(newRawData);
+            newProcessedData.forEach(newDay => {
+                const existingDayIndex = allEmployeeData.findIndex(d => d.emp_code === newDay.emp_code && d.workDate === newDay.workDate);
+                if (existingDayIndex !== -1) {
+                    newDay.punches.forEach(newPunch => {
+                        const isDuplicate = allEmployeeData[existingDayIndex].punches.some(p => p.time === newPunch.time && p.calendarDate === newPunch.calendarDate && p.state === newPunch.state);
+                        if (!isDuplicate) allEmployeeData[existingDayIndex].punches.push(newPunch);
+                    });
+                } else { allEmployeeData.push(newDay); }
+            });
+            if (isInitialLoad || !document.getElementById('startDatePicker').value) {
+                const allDates = allEmployeeData.map(p => p.workDate).sort();
+                document.getElementById('startDatePicker').value = allDates[0] || '';
+                document.getElementById('endDatePicker').value = allDates[allDates.length - 1] || '';
+            }
+            if (!isInitialLoad) { document.getElementById('jsonInput').value = ''; alert(`${newRawData.length} new records processed and merged.`); }
+            displayData();
+        } catch (e) { alert(`Error processing data: ${e.message}`); }
+    }
+    
+    function processAllData(data) {
+        const employeeWorkdaySummary = {};
+        data.forEach(record => {
+            const punchDateTime = new Date(`${record.transaction_punch_date}T${record.transaction_punch_time}`);
+            let workDate = new Date(punchDateTime);
+            const nightShift = SHIFTS.find(s => s.start > s.end); 
+            if(nightShift && punchDateTime.getHours() <= parseInt(nightShift.end.split(':')[0], 10)) {
+                 workDate.setDate(workDate.getDate() - 1);
+            }
+            const workDateStr = workDate.toISOString().split('T')[0];
+            const key = `${record.emp_code}-${workDateStr}`;
+            if (!employeeWorkdaySummary[key]) {
+                employeeWorkdaySummary[key] = { emp_code: record.emp_code, name: `${record.employee_name} ${record.employee_last_name}`.trim(), workDate: workDateStr, punches: [], paidStatus: record.paidStatus || 'Not Paid' };
+            }
+            employeeWorkdaySummary[key].punches.push({ id: record.id || Math.random().toString(36).substr(2, 9), time: record.transaction_punch_time, state: record.punch_state, calendarDate: record.transaction_punch_date });
+        });
+        return Object.values(employeeWorkdaySummary);
+    }
+    
+    function calculateDailyTotalHours(punches) {
+        let totalMillis = 0, flags = new Set(), state = 'OUT', lastCheckInTime = null;
+        const sortedPunches = punches.map(p => ({ ...p, dateTime: new Date(`${p.calendarDate}T${p.time}`) })).sort((a, b) => a.dateTime - b.dateTime);
+        const today = new Date().toISOString().split('T')[0];
+        sortedPunches.forEach(punch => {
+            if (punch.state === 'Check In') {
+                if (state === 'OUT') { state = 'IN'; lastCheckInTime = punch.dateTime; } 
+                else { flags.add(translations[currentLang].flag_unmatched); }
+            } else if (punch.state === 'Check Out') {
+                if (state === 'IN') { totalMillis += (punch.dateTime - lastCheckInTime); state = 'OUT'; lastCheckInTime = null; } 
+                else { flags.add(translations[currentLang].flag_unmatched); }
+            }
+        });
+        if (state === 'IN' && sortedPunches.length > 0 && sortedPunches[0].calendarDate < today) flags.add(translations[currentLang].flag_open_shift);
+        return { hours: totalMillis / 3600000, flags: Array.from(flags) };
+    }
+
+    function displayData() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const startDate = document.getElementById('startDatePicker').value; const endDate = document.getElementById('endDatePicker').value;
+        const dateFilteredData = allEmployeeData.filter(record => record.workDate >= startDate && record.workDate <= endDate);
+        const employeeSummary = {};
+        dateFilteredData.forEach(record => {
+            if (!employeeSummary[record.emp_code]) { employeeSummary[record.emp_code] = { emp_code: record.emp_code, name: record.name, totalHours: 0, daysWorked: 0 }; }
+            const dailyCalc = calculateDailyTotalHours(record.punches);
+            employeeSummary[record.emp_code].totalHours += dailyCalc.hours;
+            employeeSummary[record.emp_code].daysWorked++;
+        });
+        let finalData = Object.values(employeeSummary).filter(emp => emp.name.toLowerCase().includes(searchTerm) || emp.emp_code.includes(searchTerm));
+        finalData.sort((a,b) => a.name.localeCompare(b.name, currentLang === 'he' ? 'he' : 'en'));
+        window.currentFilteredDataForCSV = finalData;
+        const tableBody = document.getElementById('attendanceTableBody'); tableBody.innerHTML = '';
+        document.getElementById('no-results').classList.toggle('hidden', finalData.length > 0);
+        let grandTotalDays = 0, grandTotalHours = 0;
+        finalData.forEach(emp => {
+            grandTotalDays += emp.daysWorked; grandTotalHours += emp.totalHours;
+            const row = document.createElement('tr'); row.className = `hover:bg-gray-50 transition-colors duration-200 text-${currentLang === 'he' ? 'right' : 'left'}`;
+            row.innerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${emp.name}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${emp.emp_code}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${emp.daysWorked}</td><td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">${emp.totalHours.toFixed(2)}</td><td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium flex justify-center gap-4"><button onclick="openModal('${emp.emp_code}')" class="text-indigo-600 hover:text-indigo-900 font-bold">${translations[currentLang].view_details}</button><button onclick="openCalendarModal('${emp.emp_code}')" class="text-purple-600 hover:text-purple-900 font-bold">${translations[currentLang].calendar_view}</button></td>`;
+            tableBody.appendChild(row);
+        });
+        document.getElementById('grandTotalDays').textContent = grandTotalDays;
+        document.getElementById('grandTotalHours').textContent = grandTotalHours.toFixed(2);
+    }
+    
+    function deletePunch(empCode, workDate, punchId) {
+        const dayRecord = allEmployeeData.find(d => d.emp_code === empCode && d.workDate === workDate);
+        if (dayRecord) {
+            dayRecord.punches = dayRecord.punches.filter(p => p.id !== punchId);
+            if (dayRecord.punches.length === 0) allEmployeeData = allEmployeeData.filter(d => d.workDate !== dayRecord.workDate || d.emp_code !== dayRecord.emp_code);
+            openModal(empCode, true); displayData();
+        }
+    }
+    
+    function togglePunchStatus(empCode, workDate, punchId) {
+        const dayRecord = allEmployeeData.find(d => d.emp_code === empCode && d.workDate === workDate);
+        if (dayRecord) {
+            const punchToEdit = dayRecord.punches.find(p => p.id === punchId);
+            if (punchToEdit) punchToEdit.state = punchToEdit.state === 'Check In' ? 'Check Out' : 'Check In';
+            openModal(empCode, true); displayData();
+        }
+    }
+
+    function updatePunch(empCode, workDate, punchId, field, value) {
+        const dayRecord = allEmployeeData.find(d => d.emp_code === empCode && d.workDate === workDate);
+        if (dayRecord) {
+            const punchToEdit = dayRecord.punches.find(p => p.id === punchId);
+            if (punchToEdit) {
+                punchToEdit[field] = value;
+                const oldWorkDate = dayRecord.workDate;
+                allEmployeeData = processAllData(allEmployeeData.flatMap(day => day.punches));
+                openModal(empCode, true); displayData();
+            }
+        }
+    }
+
+    function addPunch(empCode, workDate) {
+        const newTime = document.getElementById(`new_time_${workDate}`).value; const newState = document.getElementById(`new_state_${workDate}`).value; const newDate = document.getElementById(`new_date_${workDate}`).value;
+        if (!newTime || !newState || !newDate) { alert("Please fill all fields for the new punch."); return; }
+        const newPunchData = {id: Math.random().toString(36).substr(2, 9), time: newTime, state: newState, calendarDate: newDate, emp_code: empCode, employee_name: allEmployeeData.find(d=>d.emp_code === empCode).name };
+        loadAndMergeData([newPunchData]);
+        openModal(empCode, true);
+    }
+
+    function togglePaidStatus(empCode, workDate) {
+        const dayRecord = allEmployeeData.find(d => d.emp_code === empCode && d.workDate === workDate);
+        if (dayRecord) { dayRecord.paidStatus = dayRecord.paidStatus === 'Paid' ? 'Not Paid' : 'Paid'; openModal(empCode, true); }
+    }
+
+    function openModal(empCode, isUpdate = false, singleWorkDate = null) {
+        const modal = document.getElementById('detailsModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+        let employeeRecords;
+        if (singleWorkDate) {
+            employeeRecords = allEmployeeData.filter(r => r.emp_code === empCode && r.workDate === singleWorkDate);
+        } else {
+            const startDate = document.getElementById('startDatePicker').value; const endDate = document.getElementById('endDatePicker').value;
+            employeeRecords = allEmployeeData.filter(r => r.emp_code === empCode && r.workDate >= startDate && r.workDate <= endDate).sort((a,b) => a.workDate.localeCompare(b.workDate));
+        }
+
+        if (employeeRecords.length === 0 && !isUpdate) return closeModal('detailsModal');
+        const totalHoursInRange = employeeRecords.reduce((acc, day) => acc + calculateDailyTotalHours(day.punches).hours, 0);
+        modalTitle.innerText = `${translations[currentLang].modal_title_prefix}${employeeRecords[0]?.name || empCode}`;
+        let bodyHtml = `<div class="p-4 mb-4 bg-blue-50 rounded-lg text-center"><span class="font-bold text-blue-800">${translations[currentLang].modal_range_total}</span> <span class="text-lg font-bold text-blue-900">${totalHoursInRange.toFixed(2)} ${translations[currentLang].hours}</span></div><div class="space-y-4">`;
+        employeeRecords.forEach(day => {
+            const dailyCalc = calculateDailyTotalHours(day.punches); const isPaid = day.paidStatus === 'Paid';
+            const paidButtonClass = isPaid ? 'bg-teal-500 text-white' : 'bg-gray-300 text-gray-700 hover:bg-gray-400';
+            bodyHtml += `<div class="p-3 rounded-lg bg-gray-50 border"><div class="flex justify-between items-start"><h4 class="font-bold text-md mb-2">${translations[currentLang].work_day} ${day.workDate}</h4><button onclick="togglePaidStatus('${empCode}', '${day.workDate}')" class="text-xs font-bold py-1 px-3 rounded-full ${paidButtonClass}">${isPaid ? translations[currentLang].paid : translations[currentLang].not_paid}</button></div><ul class="space-y-1 text-sm border-t pt-2 mt-2">`;
+            day.punches.sort((a, b) => new Date(`${a.calendarDate}T${a.time}`) - new Date(`${b.calendarDate}T${b.time}`)).forEach(punch => {
+                const isCheckIn = punch.state === 'Check In'; const buttonClass = isCheckIn ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600';
+                bodyHtml += `<li class="flex justify-between items-center p-1"><div class="flex items-center gap-2"><input type="date" value="${punch.calendarDate}" onchange="updatePunch('${empCode}', '${day.workDate}', '${punch.id}', 'calendarDate', this.value)" class="punch-input w-32"><input type="time" value="${punch.time}" onchange="updatePunch('${empCode}', '${day.workDate}', '${punch.id}', 'time', this.value)" class="punch-input w-24"></div><div class="flex items-center gap-2"><button onclick="togglePunchStatus('${empCode}', '${day.workDate}', '${punch.id}')" class="text-white text-xs font-bold py-1 px-3 rounded-full ${buttonClass}">${isCheckIn ? translations[currentLang].check_in : translations[currentLang].check_out}</button><button onclick="deletePunch('${empCode}', '${day.workDate}', '${punch.id}')" class="text-red-500 hover:text-red-700 font-bold text-xl">&times;</button></div></li>`;
+            });
+            bodyHtml += `<li class="p-1 mt-2 border-t"><div class="flex justify-between items-center gap-2"><div class="flex items-center gap-2"><input type="date" id="new_date_${day.workDate}" class="punch-input w-32" value="${day.workDate}"><input type="time" id="new_time_${day.workDate}" class="punch-input w-24"><select id="new_state_${day.workDate}" class="punch-input"><option value="Check In">${translations[currentLang].check_in}</option><option value="Check Out">${translations[currentLang].check_out}</option></select></div><button onclick="addPunch('${empCode}', '${day.workDate}')" class="bg-blue-500 text-white font-bold text-xs py-1 px-3 rounded-full">${translations[currentLang].add_punch_btn}</button></div></li>`;
+            bodyHtml += `</ul><div class="mt-2 pt-2 border-t font-bold text-${currentLang==='he'?'right':'left'} text-blue-600">${translations[currentLang].modal_day_total} ${dailyCalc.hours.toFixed(2)} ${translations[currentLang].hours}</div>`;
+            if (dailyCalc.flags.length > 0) bodyHtml += `<div class="mt-2 pt-2 border-t text-sm text-red-500 font-semibold"><strong>${translations[currentLang].flags}:</strong> ${dailyCalc.flags.join(', ')}</div>`;
+            bodyHtml += `</div>`;
+        });
+        bodyHtml += '</div>'; modalBody.innerHTML = bodyHtml;
+        if (!isUpdate) {
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+            setTimeout(() => { modal.querySelector('.modal-overlay').classList.remove('opacity-0'); modal.querySelector('.modal-container').classList.remove('opacity-0', 'scale-95'); }, 10);
+        }
+    }
+
+    function openCalendarModal(empCode) {
+        const modal = document.getElementById('calendarModal');
+        const employeeName = allEmployeeData.find(d => d.emp_code === empCode)?.name || empCode;
+        
+        currentCalendarDate = new Date(document.getElementById('startDatePicker').value + 'T00:00:00');
+        document.getElementById('calendarModalTitle').dataset.empCode = empCode;
+        document.getElementById('calendarModalTitle').innerText = `${translations[currentLang].calendar_view} - ${employeeName}`;
+        
+        document.getElementById('prevMonthBtn').onclick = () => { currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1); renderCalendar(empCode, currentCalendarDate); };
+        document.getElementById('nextMonthBtn').onclick = () => { currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1); renderCalendar(empCode, currentCalendarDate); };
+
+        renderCalendar(empCode, currentCalendarDate);
+
+        modal.classList.remove('hidden'); modal.classList.add('flex');
+        setTimeout(() => { modal.querySelector('.modal-overlay').classList.remove('opacity-0'); modal.querySelector('.modal-container').classList.remove('opacity-0', 'scale-95'); }, 10);
+    }
+    
+    function renderCalendar(empCode, date) {
+        const calendarBody = document.getElementById('calendarModalBody'); const monthYearEl = document.getElementById('calendarMonthYear');
+        const t = translations[currentLang]; const month = date.getMonth(); const year = date.getFullYear();
+        monthYearEl.innerText = `${date.toLocaleString(currentLang === 'he' ? 'he-IL' : 'en-US', { month: 'long' })} ${year}`;
+        const firstDay = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
+        let html = '<div class="grid grid-cols-7 gap-1 text-center font-bold">';
+        const weekdays = currentLang === 'he' ? ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        weekdays.forEach(day => { html += `<div class="p-2 text-sm">${day}</div>`; });
+        html += '</div><div class="grid grid-cols-7 gap-1 text-center border-t border-l">';
+        for (let i = 0; i < firstDay; i++) html += '<div class="border-r border-b h-24"></div>';
+        for (let i = 1; i <= daysInMonth; i++) {
+            const currentDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+            const dayRecord = allEmployeeData.find(d => d.emp_code === empCode && d.workDate === currentDateStr);
+            if (dayRecord) {
+                const dailyCalc = calculateDailyTotalHours(dayRecord.punches);
+                html += `<div onclick="openModal('${empCode}', false, '${currentDateStr}')" class="border-r border-b h-24 p-1 cursor-pointer bg-blue-50 hover:bg-blue-100 flex flex-col justify-between"><div class="font-bold text-left">${i}</div><div class="text-center font-bold text-blue-700">${dailyCalc.hours.toFixed(2)} ${t.hours}</div><div></div></div>`;
+            } else { html += `<div class="border-r border-b h-24 p-1 text-left text-gray-400"><div>${i}</div></div>`; }
+        }
+        html += '</div>'; calendarBody.innerHTML = html;
+    }
+
+
+    function closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        modal.querySelector('.modal-overlay').classList.add('opacity-0');
+        modal.querySelector('.modal-container').classList.add('opacity-0', 'scale-95');
+        setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+    }
+    
+    function downloadSummaryCSV() {
+        const data = window.currentFilteredDataForCSV; if (!data || data.length === 0) { alert("No data to download."); return; }
+        const t = translations[currentLang]; let csv = "\uFEFF"; csv += [t.th_name, t.th_id, t.th_days, t.th_hours].join(",") + "\r\n";
+        data.forEach(emp => { csv += [`"${emp.name}"`, emp.emp_code, emp.daysWorked, emp.totalHours.toFixed(2)].join(",") + "\r\n"; });
+        csv += `\r\n"${t.tf_total}",,"${document.getElementById('grandTotalDays').textContent}","${document.getElementById('grandTotalHours').textContent}"\r\n`;
+        triggerCsvDownload(csv, 'summary_report');
+    }
+
+    function downloadDetailCSV() {
+        const startDate = document.getElementById('startDatePicker').value; const endDate = document.getElementById('endDatePicker').value;
+        const employeeCodesInView = new Set(window.currentFilteredDataForCSV.map(e => e.emp_code));
+        const detailedData = allEmployeeData.filter(r => employeeCodesInView.has(r.emp_code) && r.workDate >= startDate && r.workDate <= endDate);
+        if (detailedData.length === 0) { alert("No detailed data to download."); return; }
+        const t = translations[currentLang]; let csv = "\uFEFF";
+        csv += [t.th_name, t.th_id, t.work_day, t.hours, t.paid_status, t.flags].join(",") + "\r\n";
+        detailedData.forEach(day => {
+            const calc = calculateDailyTotalHours(day.punches);
+            const row = [`"${day.name}"`, day.emp_code, day.workDate, calc.hours.toFixed(2), (day.paidStatus === 'Paid' ? t.paid : t.not_paid), `"${calc.flags.join(', ')}"`];
+            csv += row.join(",") + "\r\n";
+        });
+        triggerCsvDownload(csv, 'detail_report');
+    }
+
+    function triggerCsvDownload(csv, reportType) {
+        const link = document.createElement("a");
+        link.setAttribute("href", 'data:text/csv;charset=utf-8,' + encodeURI(csv));
+        link.setAttribute("download", `${reportType}_${document.getElementById('startDatePicker').value}_to_${document.getElementById('endDatePicker').value}.csv`);
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    }
+    
+    function saveState() {
+        const state = { shifts: SHIFTS, employeeData: allEmployeeData };
+        const blob = new Blob([JSON.stringify(state, null, 2)], {type: 'application/json'});
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'monitor_state.json';
+        link.click(); URL.revokeObjectURL(link.href);
+    }
+
+    function loadState(event) {
+        const file = event.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const state = JSON.parse(e.target.result);
+                if (state.shifts && state.employeeData) {
+                    SHIFTS = state.shifts; allEmployeeData = state.employeeData;
+                    renderShiftDefinitions();
+                    const allDates = [...new Set(allEmployeeData.map(p => p.workDate))].sort();
+                    document.getElementById('startDatePicker').value = allDates[0] || '';
+                    document.getElementById('endDatePicker').value = allDates[allDates.length - 1] || '';
+                    displayData(); alert('State loaded successfully.');
+                } else { alert('Invalid state file format.'); }
+            } catch (err) { alert('Error reading state file.'); }
+        };
+        reader.readAsText(file);
+    }
+    
+    const dummyInitialData = {"code": 0, "msg": "", "data": [{"id": "1", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-19", "transaction_punch_time": "18:10:36", "punch_state": "Check In"}, {"id": "2", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "05:40:30", "punch_state": "Check Out"}, {"id": "3", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "06:30:00", "punch_state": "Check In"}, {"id": "4", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "06:35:00", "punch_state": "Check In"}, {"id": "5", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "17:38:57", "punch_state": "Check Out"}]};
+    </script>
+
+</body>
+</ht
