@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Shift Hours Calculator</title>
+<!-- XLSX library for Excel parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;margin:20px;}
+  table{border-collapse:collapse;margin-top:20px;width:100%;}
+  th,td{border:1px solid #ccc;padding:4px;text-align:left;}
+</style>
+</head>
+<body>
+<h2>Upload Clock Data</h2>
+<input type="file" id="fileInput" accept=".csv,.json,.xlsx,.xls">
+<button id="processBtn">Process</button>
+<div id="output"></div>
+<script>
+function parseCSV(text){
+  const lines=text.trim().split(/\r?\n/);
+  if(!lines.length) return [];
+  const delim=lines[0].includes(',')?',':'\t';
+  const headers=lines[0].split(delim).map(h=>h.trim());
+  const rows=[];
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const cols=lines[i].split(delim);
+    const obj={};
+    headers.forEach((h,idx)=>{obj[h]=cols[idx]||'';});
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function parseFile(file,cb){
+  const reader=new FileReader();
+  if(file.name.match(/\.json$/i)){
+    reader.onload=e=>cb(JSON.parse(e.target.result));
+    reader.readAsText(file);
+  }else if(file.name.match(/\.csv$/i)){
+    reader.onload=e=>cb(parseCSV(e.target.result));
+    reader.readAsText(file);
+  }else if(file.name.match(/\.xlsx?$/i)){
+    reader.onload=e=>{
+      const wb=XLSX.read(e.target.result,{type:'binary'});
+      const first=wb.SheetNames[0];
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[first],{defval:''});
+      cb(rows);
+    };
+    reader.readAsBinaryString(file);
+  }else{
+    alert('Unsupported file type');
+  }
+}
+
+function computeHours(rows){
+  const byEmp={};
+  rows.forEach(r=>{
+    const emp=(r['Employee ID']||'').trim();
+    if(!emp) return;
+    const name=(r['First Name']||'').trim();
+    const date=(r['Date']||'').trim();
+    const time=(r['Time']||'').trim();
+    const state=(r['Punch State']||'').toLowerCase();
+    if(!date||!time||!state) return;
+    const ts=new Date(date+'T'+time);
+    if(!byEmp[emp]) byEmp[emp]={name,events:[]};
+    byEmp[emp].events.push({ts,state});
+  });
+
+  const totals={};
+  function add(emp,name,day,type,hours,note){
+    const key=emp+'|'+day;
+    if(!totals[key]) totals[key]={empId:emp,name,date:day,dayHours:0,nightHours:0,notes:[]};
+    if(type==='Night') totals[key].nightHours+=hours; else totals[key].dayHours+=hours;
+    if(note) totals[key].notes.push(note);
+  }
+
+  function splitByDay(emp,name,start,end,type){
+    let cur=new Date(start);
+    while(cur<end){
+      const next=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate()+1);
+      const stop=next<end?next:end;
+      const diff=(stop-cur)/3600000;
+      const day=cur.toISOString().split('T')[0];
+      add(emp,name,day,type,diff);
+      cur=stop;
+    }
+  }
+
+  Object.entries(byEmp).forEach(([emp,data])=>{
+    data.events.sort((a,b)=>a.ts-b.ts);
+    let open=null;
+    data.events.forEach(ev=>{
+      if(ev.state.includes('in')){
+        if(open){
+          const day=open.ts.toISOString().split('T')[0];
+          add(emp,data.name,day,'Day',0,'Missing checkout before next checkin');
+        }
+        open=ev;
+      }else if(ev.state.includes('out')){
+        if(open){
+          const type=(open.ts.getHours()>=18||ev.ts-open.ts>12*3600000)?'Night':'Day';
+          splitByDay(emp,data.name,open.ts,ev.ts,type);
+          open=null;
+        }else{
+          const day=ev.ts.toISOString().split('T')[0];
+          add(emp,data.name,day,'Day',0,'Checkout without checkin');
+        }
+      }
+    });
+    if(open){
+      const day=open.ts.toISOString().split('T')[0];
+      add(emp,data.name,day,'Day',0,'Open shift without checkout');
+    }
+  });
+
+  return Object.values(totals);
+}
+
+function displayResults(res){
+  if(!res.length){
+    document.getElementById('output').textContent='No data';
+    return;
+  }
+  let html='<table><thead><tr><th>Employee</th><th>Name</th><th>Date</th><th>Day Hours</th><th>Night Hours</th><th>Notes</th></tr></thead><tbody>';
+  res.forEach(r=>{const notes=r.notes.join('; ');html+=`<tr><td>${r.empId}</td><td>${r.name}</td><td>${r.date}</td><td>${r.dayHours.toFixed(2)}</td><td>${r.nightHours.toFixed(2)}</td><td>${notes}</td></tr>`});
+  html+='</tbody></table>';
+  document.getElementById('output').innerHTML=html;
+}
+
+document.getElementById('processBtn').addEventListener('click',()=>{
+  const file=document.getElementById('fileInput').files[0];
+  if(!file) return alert('Select a file');
+  parseFile(file,rows=>{
+    const res=computeHours(rows);
+    displayResults(res);
+  });
+});
+</script>
+</body>
+</html>
