@@ -20,7 +20,9 @@
 function parseCSV(text){
   const lines=text.trim().split(/\r?\n/);
   if(!lines.length) return [];
-  const delim=lines[0].includes(',')?',':'\t';
+  let delim=',';
+  if(lines[0].includes(';')) delim=';';
+  else if(!lines[0].includes(',')) delim='\t';
   const headers=lines[0].split(delim).map(h=>h.trim());
   const rows=[];
   for(let i=1;i<lines.length;i++){
@@ -89,6 +91,10 @@ function computeHours(rows){
     }
   }
 
+  function isNightShift(start,end){
+    return start.getHours()>=18 || end.getHours()<6 || start.toDateString()!==end.toDateString();
+  }
+
   Object.entries(byEmp).forEach(([emp,data])=>{
     data.events.sort((a,b)=>a.ts-b.ts);
     let open=null;
@@ -101,7 +107,7 @@ function computeHours(rows){
         open=ev;
       }else if(ev.state.includes('out')){
         if(open){
-          const type=(open.ts.getHours()>=18||ev.ts-open.ts>12*3600000)?'Night':'Day';
+          const type=isNightShift(open.ts,ev.ts)?'Night':'Day';
           splitByDay(emp,data.name,open.ts,ev.ts,type);
           open=null;
         }else{
