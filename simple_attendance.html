@@ -74,18 +74,31 @@ function computeHours(rows){
     const key=emp+'|'+day;
     if(!totals[key]) totals[key]={empId:emp,name,date:day,dayHours:0,nightHours:0,notes:[]};
     if(type==='Night') totals[key].nightHours+=hours; else totals[key].dayHours+=hours;
-    if(note) totals[key].notes.push(note);
+    if(note && !totals[key].notes.includes(note)) totals[key].notes.push(note);
   }
 
-  function splitByDay(emp,name,start,end,type){
+  function addInterval(emp,name,start,end){
     let cur=new Date(start);
     while(cur<end){
-      const next=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate()+1);
-      const stop=next<end?next:end;
-      const diff=(stop-cur)/3600000;
+      const y=cur.getFullYear(),m=cur.getMonth(),d=cur.getDate();
+      const sixAM=new Date(y,m,d,6,0,0);
+      const sixPM=new Date(y,m,d,18,0,0);
+      let next,type;
+      if(cur<sixAM){
+        next=end<sixAM?end:sixAM;
+        type='Night';
+      }else if(cur<sixPM){
+        next=end<sixPM?end:sixPM;
+        type='Day';
+      }else{
+        const nextSixAM=new Date(y,m,d+1,6,0,0);
+        next=end<nextSixAM?end:nextSixAM;
+        type='Night';
+      }
+      const diff=(next-cur)/3600000;
       const day=cur.toISOString().split('T')[0];
       add(emp,name,day,type,diff);
-      cur=stop;
+      cur=next;
     }
   }
 
@@ -101,9 +114,14 @@ function computeHours(rows){
         open=ev;
       }else if(ev.state.includes('out')){
         if(open){
-          const type=(open.ts.getHours()>=18||ev.ts-open.ts>12*3600000)?'Night':'Day';
-          splitByDay(emp,data.name,open.ts,ev.ts,type);
-          open=null;
+          if(ev.ts<=open.ts){
+            const day=open.ts.toISOString().split('T')[0];
+            add(emp,data.name,day,'Day',0,'Checkout earlier than checkin');
+            open=null;
+          }else{
+            addInterval(emp,data.name,open.ts,ev.ts);
+            open=null;
+          }
         }else{
           const day=ev.ts.toISOString().split('T')[0];
           add(emp,data.name,day,'Day',0,'Checkout without checkin');
