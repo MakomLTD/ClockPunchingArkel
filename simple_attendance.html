@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Shift Hours Calculator</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;margin:20px;}
+  table{border-collapse:collapse;margin-top:20px;width:100%;}
+  th,td{border:1px solid #ccc;padding:4px;text-align:left;}
+</style>
+</head>
+<body>
+<h2>Upload Clock Data</h2>
+<input type="file" id="fileInput" accept=".csv,.json">
+<button id="processBtn">Process</button>
+<div id="output"></div>
+<script>
+function parseCSV(text){
+  const lines=text.trim().split(/\r?\n/);
+  if(!lines.length) return [];
+  const delim=lines[0].includes(',')?',':'\t';
+  const headers=lines[0].split(delim).map(h=>h.trim());
+  const rows=[];
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const cols=lines[i].split(delim);
+    const obj={};
+    headers.forEach((h,idx)=>{obj[h]=cols[idx]||'';});
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function computeHours(rows){
+  const map={};
+  rows.forEach(r=>{
+    const emp=r['Employee ID'];
+    if(!emp) return;
+    const name=r['First Name']||'';
+    const date=r['Date'];
+    const time=r['Time'];
+    const state=r['Punch State'];
+    if(!date||!time||!state) return;
+    const ts=new Date(date+'T'+time);
+    if(!map[emp]) map[emp]={name,events:[]};
+    map[emp].events.push({ts,state});
+  });
+  const results=[];
+  Object.keys(map).forEach(emp=>{
+    const data=map[emp];
+    data.events.sort((a,b)=>a.ts-b.ts);
+    let open=null;
+    const totals={};
+    data.events.forEach(ev=>{
+      const type=ev.state.toLowerCase();
+      if(type.includes('in')){
+        open=ev.ts;
+      }else if(type.includes('out')){
+        if(open){
+          let diff=(ev.ts-open)/3600000;
+          const key=open.toISOString().split('T')[0];
+          totals[key]=(totals[key]||0)+diff;
+          open=null;
+        }
+      }
+    });
+    Object.keys(totals).forEach(day=>{
+      results.push({empId:emp,name:data.name,date:day,hours:totals[day]});
+    });
+  });
+  return results;
+}
+
+function displayResults(res){
+  if(!res.length){document.getElementById('output').textContent='No data';return;}
+  let html='<table><thead><tr><th>Employee</th><th>Name</th><th>Date</th><th>Hours</th></tr></thead><tbody>';
+  res.forEach(r=>{html+=`<tr><td>${r.empId}</td><td>${r.name}</td><td>${r.date}</td><td>${r.hours.toFixed(2)}</td></tr>`});
+  html+='</tbody></table>';
+  document.getElementById('output').innerHTML=html;
+}
+
+document.getElementById('processBtn').addEventListener('click',()=>{
+  const file=document.getElementById('fileInput').files[0];
+  if(!file) return alert('Select a file');
+  const reader=new FileReader();
+  reader.onload=e=>{
+    let rows;
+    if(file.name.endsWith('.json')){
+      rows=JSON.parse(e.target.result);
+    }else{
+      rows=parseCSV(e.target.result);
+    }
+    const res=computeHours(rows);
+    displayResults(res);
+  };
+  reader.readAsText(file);
+});
+</script>
+</body>
+</html>
