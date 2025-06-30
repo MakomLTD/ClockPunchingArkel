@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Attendance Monitor - Advanced</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -109,10 +110,26 @@
                     </tfoot>
                 </table>
             </div>
-            <div id="no-results" class="text-center py-10 text-gray-500 hidden">
-                <p class="text-xl" data-translate="no_results">No results found matching your search.</p>
-            </div>
+        <div id="no-results" class="text-center py-10 text-gray-500 hidden">
+            <p class="text-xl" data-translate="no_results">No results found matching your search.</p>
         </div>
+    </div>
+
+    <!-- Quick Calculator Section -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-3">Quick Excel Upload</h2>
+        <input type="file" id="fileInput" accept=".csv,.json,.xlsx,.xls" class="mb-2">
+        <button id="processBtn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Process</button>
+        <div class="mt-4 flex flex-wrap gap-2">
+            <input type="text" id="filterInput" placeholder="Filter by name or ID" class="flex-1 border border-gray-300 p-2 rounded">
+            <label class="text-sm">Start: <input type="date" id="startDate" class="border border-gray-300 p-1 rounded"></label>
+            <label class="text-sm">End: <input type="date" id="endDate" class="border border-gray-300 p-1 rounded"></label>
+            <button id="downloadBtn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Download Excel</button>
+        </div>
+        <div id="output" class="mt-4 overflow-x-auto"></div>
+    </div>
+
+    <!-- Modal for Punch Details -->
     </div>
 
     <!-- Modal for Punch Details -->
@@ -511,8 +528,213 @@
         reader.readAsText(file);
     }
     
-    const dummyInitialData = {"code": 0, "msg": "", "data": [{"id": "1", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-19", "transaction_punch_time": "18:10:36", "punch_state": "Check In"}, {"id": "2", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "05:40:30", "punch_state": "Check Out"}, {"id": "3", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "06:30:00", "punch_state": "Check In"}, {"id": "4", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "06:35:00", "punch_state": "Check In"}, {"id": "5", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "17:38:57", "punch_state": "Check Out"}]};
-    </script>
+const dummyInitialData = {"code": 0, "msg": "", "data": [{"id": "1", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-19", "transaction_punch_time": "18:10:36", "punch_state": "Check In"}, {"id": "2", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "05:40:30", "punch_state": "Check Out"}, {"id": "3", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "06:30:00", "punch_state": "Check In"}, {"id": "4", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "06:35:00", "punch_state": "Check In"}, {"id": "5", "emp_code": "190", "employee_name": "Beburi", "employee_last_name": "Phiphia", "transaction_punch_date": "2025-06-20", "transaction_punch_time": "17:38:57", "punch_state": "Check Out"}]};
+</script>
+
+<script>
+function parseCSV(text){
+  const lines=text.trim().split(/\r?\n/);
+  if(!lines.length) return [];
+  const delim=lines[0].includes(',')?',':'\t';
+  let headers=lines[0].split(delim).map(h=>h.trim());
+  if(!headers.includes('Employee ID') && lines.length>1){
+    const possible=lines[1].split(delim).map(h=>h.trim());
+    if(possible.includes('Employee ID')){ lines.shift(); headers=possible; }
+  }
+  const rows=[];
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const cols=lines[i].split(delim);
+    const obj={};
+    headers.forEach((h,idx)=>{obj[h]=cols[idx]||'';});
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function parseFile(file,cb){
+  const reader=new FileReader();
+  if(file.name.match(/\.json$/i)){
+    reader.onload=e=>cb(JSON.parse(e.target.result));
+    reader.readAsText(file);
+  }else if(file.name.match(/\.csv$/i)){
+    reader.onload=e=>cb(parseCSV(e.target.result));
+    reader.readAsText(file);
+  }else if(file.name.match(/\.xlsx?$/i)){
+    reader.onload=e=>{
+      const wb=XLSX.read(e.target.result,{type:'binary'});
+      const first=wb.SheetNames[0];
+      let data=XLSX.utils.sheet_to_json(wb.Sheets[first],{header:1,defval:''});
+      if(!data.length){cb([]);return;}
+      let headers=data[0];
+      if(headers.indexOf('Employee ID')===-1 && data.length>1 && data[1].indexOf('Employee ID')!==-1){
+        headers=data[1];
+        data=data.slice(2);
+      }else{
+        data=data.slice(1);
+      }
+      const rows=data.map(row=>{
+        const obj={};
+        headers.forEach((h,idx)=>{obj[h]=row[idx]||'';});
+        return obj;
+      });
+      cb(rows);
+    };
+    reader.readAsBinaryString(file);
+  }else{
+    alert('Unsupported file type');
+  }
+}
+
+function computeHours(rows){
+  const byEmp={};
+  rows.forEach(r=>{
+    const emp=(r['Employee ID']||'').trim();
+    if(!emp) return;
+    const name=(r['First Name']||'').trim();
+    const date=(r['Date']||'').trim();
+    const time=(r['Time']||'').trim();
+    const state=(r['Punch State']||'').toLowerCase();
+    if(!date||!time||!state) return;
+    const ts=new Date(date+'T'+time);
+    if(!byEmp[emp]) byEmp[emp]={name,events:[]};
+    byEmp[emp].events.push({ts,state});
+  });
+
+  const totals={};
+  function add(emp,name,day,type,hours,note){
+    const key=emp+'|'+day;
+    if(!totals[key]) totals[key]={empId:emp,name,date:day,dayHours:0,nightHours:0,notes:[]};
+    if(type==='Night') totals[key].nightHours+=hours; else totals[key].dayHours+=hours;
+    if(note && !totals[key].notes.includes(note)) totals[key].notes.push(note);
+  }
+
+  function addInterval(emp,name,start,end){
+    let cur=new Date(start);
+    while(cur<end){
+      const y=cur.getFullYear(),m=cur.getMonth(),d=cur.getDate();
+      const sixAM=new Date(y,m,d,6,0,0);
+      const sixPM=new Date(y,m,d,18,0,0);
+      let next,type;
+      if(cur<sixAM){
+        next=end<sixAM?end:sixAM;
+        type='Night';
+      }else if(cur<sixPM){
+        next=end<sixPM?end:sixPM;
+        type='Day';
+      }else{
+        const nextSixAM=new Date(y,m,d+1,6,0,0);
+        next=end<nextSixAM?end:nextSixAM;
+        type='Night';
+      }
+      const diff=(next-cur)/3600000;
+      const day=cur.toISOString().split('T')[0];
+      add(emp,name,day,type,diff);
+      cur=next;
+    }
+  }
+
+  Object.entries(byEmp).forEach(([emp,data])=>{
+    data.events.sort((a,b)=>a.ts-b.ts);
+    let open=null;
+    data.events.forEach(ev=>{
+      if(ev.state.includes('in')){
+        if(open){
+          const day=open.ts.toISOString().split('T')[0];
+          add(emp,data.name,day,'Day',0,'Missing checkout before next checkin');
+        }
+        open=ev;
+      }else if(ev.state.includes('out')){
+        if(open){
+          if(ev.ts<=open.ts){
+            const day=open.ts.toISOString().split('T')[0];
+            add(emp,data.name,day,'Day',0,'Checkout earlier than checkin');
+            open=null;
+          }else{
+            addInterval(emp,data.name,open.ts,ev.ts);
+            open=null;
+          }
+        }else{
+          const day=ev.ts.toISOString().split('T')[0];
+          add(emp,data.name,day,'Day',0,'Checkout without checkin');
+        }
+      }
+    });
+    if(open){
+      const day=open.ts.toISOString().split('T')[0];
+      add(emp,data.name,day,'Day',0,'Open shift without checkout');
+    }
+  });
+
+  return Object.values(totals);
+}
+
+function displayResults(res){
+  if(!res.length){
+    document.getElementById('output').textContent='No data';
+    return;
+  }
+  const byEmp={};
+  res.forEach(r=>{
+    if(!byEmp[r.empId]) byEmp[r.empId]={name:r.name,day:0,night:0,details:[]};
+    byEmp[r.empId].day+=r.dayHours;
+    byEmp[r.empId].night+=r.nightHours;
+    byEmp[r.empId].details.push(r);
+  });
+  let html='<table class="min-w-full text-sm"><thead><tr><th>Employee</th><th>Name</th><th>Day Hours</th><th>Night Hours</th><th>Total</th><th>Action</th></tr></thead><tbody>';
+  Object.entries(byEmp).forEach(([id,emp])=>{
+    const total=(emp.day+emp.night).toFixed(2);
+    html+=`<tr><td>${id}</td><td>${emp.name}</td><td>${emp.day.toFixed(2)}</td><td>${emp.night.toFixed(2)}</td><td>${total}</td><td><button onclick="toggleDetails('${id}')" class="text-blue-600">Details</button></td></tr>`;
+    html+=`<tr id="details-${id}" style="display:none"><td colspan="6"><table class="min-w-full text-xs"><thead><tr><th>Date</th><th>Day</th><th>Night</th><th>Notes</th></tr></thead><tbody>`;
+    emp.details.forEach(d=>{const notes=d.notes.join('; ');html+=`<tr><td>${d.date}</td><td>${d.dayHours.toFixed(2)}</td><td>${d.nightHours.toFixed(2)}</td><td>${notes}</td></tr>`});
+    html+='</tbody></table></td></tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('output').innerHTML=html;
+}
+
+function toggleDetails(id){
+  const row=document.getElementById('details-'+id);
+  if(row) row.style.display=row.style.display==='none'?'table-row':'none';
+}
+
+let originalData=[];
+function updateDisplay(){
+  const filter=document.getElementById('filterInput').value.toLowerCase();
+  const start=document.getElementById('startDate').value;
+  const end=document.getElementById('endDate').value;
+  const filtered=originalData.filter(r=>{
+    if(start && r.date<start) return false;
+    if(end && r.date>end) return false;
+    return r.empId.includes(filter)||r.name.toLowerCase().includes(filter);
+  });
+  window.filteredData=filtered;
+  displayResults(filtered);
+}
+
+document.getElementById('processBtn').addEventListener('click',()=>{
+  const file=document.getElementById('fileInput').files[0];
+  if(!file) return alert('Select a file');
+  parseFile(file,rows=>{
+    originalData=computeHours(rows);
+    updateDisplay();
+  });
+});
+
+document.getElementById('filterInput').addEventListener('input',updateDisplay);
+document.getElementById('startDate').addEventListener('change',updateDisplay);
+document.getElementById('endDate').addEventListener('change',updateDisplay);
+
+function downloadExcel(){
+  if(!window.filteredData||!window.filteredData.length){alert('No data');return;}
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(window.filteredData);
+  XLSX.utils.book_append_sheet(wb,ws,'Attendance');
+  XLSX.writeFile(wb,'attendance.xlsx');
+}
+
+document.getElementById('downloadBtn').addEventListener('click',downloadExcel);
+</script>
 
 </body>
 </html>
