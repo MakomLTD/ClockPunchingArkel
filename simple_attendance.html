@@ -15,13 +15,23 @@
 <h2>Upload Clock Data</h2>
 <input type="file" id="fileInput" accept=".csv,.json,.xlsx,.xls">
 <button id="processBtn">Process</button>
+<div style="margin-top:10px">
+  <input type="text" id="filterInput" placeholder="Filter by name or ID">
+  <label>Start: <input type="date" id="startDate"></label>
+  <label>End: <input type="date" id="endDate"></label>
+  <button id="downloadBtn">Download Excel</button>
+</div>
 <div id="output"></div>
 <script>
 function parseCSV(text){
   const lines=text.trim().split(/\r?\n/);
   if(!lines.length) return [];
   const delim=lines[0].includes(',')?',':'\t';
-  const headers=lines[0].split(delim).map(h=>h.trim());
+  let headers=lines[0].split(delim).map(h=>h.trim());
+  if(!headers.includes('Employee ID') && lines.length>1){
+    const possible=lines[1].split(delim).map(h=>h.trim());
+    if(possible.includes('Employee ID')){ lines.shift(); headers=possible; }
+  }
   const rows=[];
   for(let i=1;i<lines.length;i++){
     if(!lines[i].trim()) continue;
@@ -45,7 +55,20 @@ function parseFile(file,cb){
     reader.onload=e=>{
       const wb=XLSX.read(e.target.result,{type:'binary'});
       const first=wb.SheetNames[0];
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[first],{defval:''});
+      const data=XLSX.utils.sheet_to_json(wb.Sheets[first],{header:1,defval:''});
+      if(!data.length){cb([]);return;}
+      let headers=data[0];
+      if(headers.indexOf('Employee ID')===-1 && data.length>1 && data[1].indexOf('Employee ID')!==-1){
+        headers=data[1];
+        data=data.slice(2);
+      }else{
+        data=data.slice(1);
+      }
+      const rows=data.map(row=>{
+        const obj={};
+        headers.forEach((h,idx)=>{obj[h]=row[idx]||'';});
+        return obj;
+      });
       cb(rows);
     };
     reader.readAsBinaryString(file);
@@ -142,20 +165,66 @@ function displayResults(res){
     document.getElementById('output').textContent='No data';
     return;
   }
-  let html='<table><thead><tr><th>Employee</th><th>Name</th><th>Date</th><th>Day Hours</th><th>Night Hours</th><th>Notes</th></tr></thead><tbody>';
-  res.forEach(r=>{const notes=r.notes.join('; ');html+=`<tr><td>${r.empId}</td><td>${r.name}</td><td>${r.date}</td><td>${r.dayHours.toFixed(2)}</td><td>${r.nightHours.toFixed(2)}</td><td>${notes}</td></tr>`});
+  const byEmp={};
+  res.forEach(r=>{
+    if(!byEmp[r.empId]) byEmp[r.empId]={name:r.name,day:0,night:0,details:[]};
+    byEmp[r.empId].day+=r.dayHours;
+    byEmp[r.empId].night+=r.nightHours;
+    byEmp[r.empId].details.push(r);
+  });
+  let html='<table><thead><tr><th>Employee</th><th>Name</th><th>Day Hours</th><th>Night Hours</th><th>Total</th><th>Action</th></tr></thead><tbody>';
+  Object.entries(byEmp).forEach(([id,emp])=>{
+    const total=(emp.day+emp.night).toFixed(2);
+    html+=`<tr><td>${id}</td><td>${emp.name}</td><td>${emp.day.toFixed(2)}</td><td>${emp.night.toFixed(2)}</td><td>${total}</td><td><button onclick="toggleDetails('${id}')">Details</button></td></tr>`;
+    html+=`<tr id="details-${id}" style="display:none"><td colspan="6"><table><thead><tr><th>Date</th><th>Day</th><th>Night</th><th>Notes</th></tr></thead><tbody>`;
+    emp.details.forEach(d=>{const notes=d.notes.join('; ');html+=`<tr><td>${d.date}</td><td>${d.dayHours.toFixed(2)}</td><td>${d.nightHours.toFixed(2)}</td><td>${notes}</td></tr>`});
+    html+='</tbody></table></td></tr>';
+  });
   html+='</tbody></table>';
   document.getElementById('output').innerHTML=html;
+}
+
+function toggleDetails(id){
+  const row=document.getElementById('details-'+id);
+  if(row) row.style.display=row.style.display==='none'?'table-row':'none';
+}
+
+let originalData=[];
+function updateDisplay(){
+  const filter=document.getElementById('filterInput').value.toLowerCase();
+  const start=document.getElementById('startDate').value;
+  const end=document.getElementById('endDate').value;
+  const filtered=originalData.filter(r=>{
+    if(start && r.date<start) return false;
+    if(end && r.date>end) return false;
+    return r.empId.includes(filter)||r.name.toLowerCase().includes(filter);
+  });
+  window.filteredData=filtered;
+  displayResults(filtered);
 }
 
 document.getElementById('processBtn').addEventListener('click',()=>{
   const file=document.getElementById('fileInput').files[0];
   if(!file) return alert('Select a file');
   parseFile(file,rows=>{
-    const res=computeHours(rows);
-    displayResults(res);
+    originalData=computeHours(rows);
+    updateDisplay();
   });
 });
+
+document.getElementById('filterInput').addEventListener('input',updateDisplay);
+document.getElementById('startDate').addEventListener('change',updateDisplay);
+document.getElementById('endDate').addEventListener('change',updateDisplay);
+
+function downloadExcel(){
+  if(!window.filteredData||!window.filteredData.length){alert('No data');return;}
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(window.filteredData);
+  XLSX.utils.book_append_sheet(wb,ws,'Attendance');
+  XLSX.writeFile(wb,'attendance.xlsx');
+}
+
+document.getElementById('downloadBtn').addEventListener('click',downloadExcel);
 </script>
 </body>
 </html>
